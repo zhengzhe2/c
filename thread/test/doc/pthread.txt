@@ -1,0 +1,445 @@
+一、基本线程编程
+线程库
+1.创建缺省线程
+    如果未指定属性对象，则该对象为NULL，系统会创建具有以下属性的缺省线程：
+    进程范围
+    非分离
+    缺省栈和缺省栈大小
+    零优先级
+    pthread_create语法
+    可以向当前进程中添加新的受控线程
+    #include <pthread.h>
+    int pthread_create(pthread_t *tid, const pthread_attr_t *tattr,void*(*start_routine)(void *), void *arg);
+eg： 
+    pthread_t tid;
+    pthread_attr_t() tattr;
+    extern void *start_routine(void *arg);
+    void *arg;
+    int ret;
+
+    /* default behavior*/
+    ret = pthread_create(&tid, NULL, start_routine, arg);
+    
+    /* initialized with default attributes */
+    pthread_attr_init(&tattr);
+    /* default behavior specified*/
+    ret = pthread_create(&tid, &tattr, start_routine, arg);
+
+    使用具有必要状态行为的attr调用pthread_create()函数。start_routine是新线程最先
+    执行的函数。当start_routine返回时，该线程将退出，其退出状态设置为由
+    start_routine返回的值。
+    当pthread_create()成功时，所创建线程的ID被存储在由tid指向的位置中。
+    使用NULL属性参数或缺省属性调用pthread_create()时，pthread_create()会创建一
+    个缺省线程。在对tattr进行初始化之后，该线程将获得缺省行为。
+    pthread_create返回值：
+    pthread_create()在调用成功完成之后返回零。其他任何返回值都表示出现了错误。
+    如果检测到以下任一情况，pthread_create()将失败并返回相应的值。
+    EAGAIN
+    描述: 超出了系统限制，如创建的线程太多
+    EINVAL
+    描述: tattr的值无效。
+2.等待线程终止
+    pthread_join语法
+    会一直阻塞调用线程，直到指定的线程终止。
+    #include <pthread.h>
+    int pthread_join(thread_t tid, void **status);
+    pthread_t tid;
+    int ret;
+    void *status;
+    /* waiting to join thread "tid" with status */
+    ret = pthread_join(tid, &status);
+    /* waiting to join thread "tid" without status */
+    ret = pthread_join(tid, NULL);
+    指定的线程必须位于当前的进程中，而且不得是分离线程。
+    当status不是NULL时，status指向某个位置，在pthread_join()成功返回时，将该位置
+    设置为已终止线程的退出状态。
+    如果多个线程等待同一个线程终止，则所有等待线程将一直等到目标线程终止。然
+    后，一个等待线程成功返回。其余的等待线程将失败并返回ESRCH错误。
+    在pthread_join()返回之后，应用程序可回收与已终止线程关联的任何数据存储空
+    间。
+    pthread_join返回值：
+    调用成功完成后，pthread_join()将返回零。其他任何返回值都表示出现了错误。如
+    果检测到以下任一情况，pthread_join()将失败并返回相应的值。
+    ESRCH
+    描述: 没有找到与给定的线程ID相对应的线程。
+    EDEADLK
+    描述: 将出现死锁，如一个线程等待其本身，或者线程A和线程B互相等待。
+    EINVAL
+    描述: 与给定的线程ID相对应的线程是分离线程。
+    pthread_join()仅适用于非分离的目标线程。如果没有必要等待特定线程终止之后才
+    进行其他处理，则应当将该线程分离。
+3.分离线程
+    pthread_detach语法
+    pthread_detach()是pthread_join()的替代函数，可回收创建时detachstate属性设
+    置为PTHREAD_CREATE_JOINABLE的线程的存储空间。
+    #include <pthread.h>
+    int pthread_detach(thread_t tid);
+    pthread_t tid;
+    int ret;
+    /* detach thread tid */
+    ret = pthread_detach(tid);
+    pthread_detach()函数用于指示应用程序在线程tid终止时回收其存储空间。如果tid尚
+    未终止，pthread_detach()不会终止该线程。
+    pthread_detach返回值：
+    pthread_detach()在调用成功完成之后返回零。其他任何返回值都表示出现了错误。
+    如果检测到以下任一情况，pthread_detach()将失败并返回相应的值。
+    EINVAL
+    描述: tid是分离线程。
+    ESRCH
+    描述: tid不是当前进程中有效的未分离的线程。
+4.为线程特定数据创建键
+    单线程C程序有两类基本数据：局部数据和全局数据。对于多线程C程序，添加了第
+    三类数据：线程特定数据。线程特定数据与全局数据非常相似，区别在于前者为线程
+    专有。
+    线程特定数据基于每线程进行维护。TSD（特定于线程的数据）是定义和引用线程专
+    用数据的唯一方法。每个线程特定数据项都与一个作用于进程内所有线程的键关联。
+    通过使用key，线程可以访问基于每线程进行维护的指针(void*)。
+    pthread_key_create语法
+    #include <pthread.h>
+    int pthread_key_create(pthread_key_t *key, void (*destructor) (void *));
+    pthread_key_t key;
+    int ret;
+    /* key create without destructor */
+    ret = pthread_key_create(&key, NULL);
+    /* key create with destructor */
+    ret = pthread_key_create(&key, destructor);
+    可以使用pthread_key_create(3C)分配用于标识进程中线程特定数据的键。键对进程
+    中的所有线程来说是全局的。创建线程特定数据时，所有线程最初都具有与该键关联
+    的NULL值。
+    使用各个键之前，会针对其调用一次pthread_key_create()。不存在对键（为进程中所
+    有的线程所共享）的隐含同步。
+    创建键之后，每个线程都会将一个值绑定到该键。这些值特定于线程并且针对每个线
+    程单独维护。如果创建该键时指定了destructor函数，则该线程终止时，系统会解除
+    针对每线程的绑定。
+    当pthread_key_create()成功返回时，会将已分配的键存储在key指向的位置中。调用
+    方必须确保对该键的存储和访问进行正确的同步。
+    使用可选的析构函数destructor可以释放过时的存储。如果某个键具有非NULL
+    destructor函数，而线程具有一个与该键关联的非NULL值，则该线程退出时，系统将
+    使用当前的相关值调用destructor函数。destructor函数的调用顺序不确定。
+    pthread_key_create返回值
+    pthread_key_create()在成功完成之后返回零。其他任何返回值都表示出现了错误。如
+    果出现以下任一情况，pthread_key_create()将失败并返回相应的值。
+    EAGAIN
+    描述: key名称空间已经用完。
+    ENOMEM
+    描述: 此进程中虚拟内存不足，无法创建新键。
+5.删除线程特定数据键
+    pthread_key_delete语法
+6.设置线程特定数据
+    pthread_setspecific语法
+7.获取线程特定数据
+    pthread_getspecific语法
+8.获取线程标识符
+    pthread_self语法
+9.比较线程ID
+    pthread_equal语法
+10.初始化线程
+    pthread_once语法
+11.停止执行线程
+    sched_yield语法
+12.设置线程的优先级
+    pthread_setschedparam语法
+13.获取线程的优先级
+    pthread_getschedparam语法
+14.向线程发送信号
+    pthread_kill语法
+15.访问调用线程的信号掩码
+    pthread_sigmask语法
+16.安全地Fork
+    pthread_atfork语法
+17.终止线程
+    pthread_exit语法
+18.结束
+    线程可通过以下方法来终止执行：
+    （1）从线程的第一个（最外面的）过程返回，使线程启动例程。请参见pthread_create。
+    （2）调用pthread_exit()，提供退出状态
+    （3）使用POSIX取消函数执行终止操作。请参见pthread_cancel()。
+    
+    线程的缺省行为是拖延，直到其他线程通过"joining"拖延线程确认其已死亡。此行为
+    与非分离的缺省pthread_create()属性相同，请参见pthread_detach。join的结果是
+    joining线程得到已终止线程的退出状态，已终止的线程将消失。
+
+    有一个重要的特殊情况，即当初始线程（即调用main()的线程）从main()调用返回时
+    或调用exit()时，整个进程及其所有的线程将终止。因此，一定要确保初始线程不会
+    从main()过早地返回。
+
+    请注意，如果主线程仅仅调用了pthread_exit，则仅主线程本身终止。进程及进程内
+    的其他线程将继续存在。所有线程都已终止时，进程也将终止。
+
+19.取消线程
+    取消操作允许线程请求终止其所在进程中的任何其他线程。
+20.取消点
+    仅当取消操作安全时才应取消线程。pthreads标准指定了几个取消点，其中包括：
+    （1）通过pthread_testcancel调用以编程方式建立线程取消点。
+    （2）线程等待pthread_cond_wait或pthread_cond_timedwait()中的特定条件出现
+    （3）被sigwait()阻塞的线程
+    （4）一些标准的库调用。通常，这些调用包括线程可基于其阻塞的函数。
+21.放置取消点
+    执行取消操作存在一定的危险。大多数危险都与完全恢复不变量和释放共享资源有
+关。取消线程时一定要格外小心，否则可能会使互斥保留为锁定状态，从而导致死
+锁。或者，已取消的线程可能保留已分配的内存区域，但是系统无法识别这一部分内
+存，从而无法释放它。
+标准C库指定了一个取消接口用于以编程方式允许或禁止取消功能。该库定义的取消
+点是一组可能会执行取消操作的点。该库还允许定义取消处理程序的范围，以确保这
+些处理程序在预期的时间和位置运行。取消处理程序提供的清理服务可以将资源和状
+态恢复到与起点一致的状态。
+必须对应用程序有一定的了解，才能放置取消点并执行取消处理程序。互斥肯定不是
+取消点，只应当在必要时使之保留尽可能短的时间。
+请将异步取消区域限制在没有外部依赖性的序列，因为外部依赖性可能会产生挂起的
+资源或未解决的状态条件。在从某个备用的嵌套取消状态返回时，一定要小心地恢复
+取消状态。该接口提供便于进行恢复的功能：pthread_setcancelstate(3C)在所引用的
+变量中保留当前的取消状态，pthread_setcanceltype(3C)以同样的方式保留当前的取
+消类型。
+在以下三种不同的情况下可能会执行取消操作：
+■
+异步
+■
+执行序列中按标准定义的各个点
+线程库
+多线程编程指南 • 2006年10月 44
+■
+调用pthread_testcancel()时
+缺省情况下，仅在POSIX标准可靠定义的点执行取消操作。
+无论何时，都应注意资源和状态恢已复到与起点一致的状态。
+22.取消线程
+    pthread_cancel语法
+    取消请求的处理方式取决于目标线程的状态。状态由以下两个函数确定
+    ：pthread_setcancelstate()和pthread_setcanceltype()。
+23.启用或禁用取消功能
+    请使用pthread_setcancelstate()启用或禁用线程取消功能。创建线程时，缺省情况
+    下线程取消功能处于启用状态。
+    pthread_setcancelstate语法
+24.设置取消类型
+    使用pthread_setcanceltype()可以将取消类型设置为延迟或异步模式。
+    创建线程时，缺省情况下会将取消类型设置为延迟模式。在延迟模式下，只能在取消
+    点取消线程。在异步模式下，可以在执行过程中的任意一点取消线程。因此建议不使
+    用异步模式。
+25.创建取消点
+    pthread_testcancel语法
+    当线程取消功能处于启用状态且取消类型设置为延迟模式时，pthread_testcancel()函
+    数有效。如果在取消功能处于禁用状态下调用pthread_testcancel()，则该函数不起作
+    用。  
+
+    请务必仅在线程取消操作安全的序列中插入pthread_testcancel()。除通过
+    pthread_testcancel()调用以编程方式建立的取消点以外，pthread标准还指定了几个
+    取消点。
+26.将处理程序推送到栈上
+    使用清理处理程序，可以将状态恢复到与起点一致的状态，其中包括清理已分配的资
+    源和恢复不变量。使用pthread_cleanup_push(3C)和pthread_cleanup_pop(3C)函数可
+    以管理清理处理程序。
+    在程序的同一词法域中可以推送和弹出清理处理程序。推送和弹出操作应当始终匹
+    配，否则会生成编译器错误。
+    pthread_cleanup_push语法
+    使用pthread_cleanup_push()将清理处理程序推送到清理栈(LIFO)。
+27.从栈中弹出处理程序
+    pthread_cleanup_pop语法
+    请使用pthread_cleanup_pop()从清理栈中弹出清理处理程序。
+
+
+二、线程属性
+1初始化属性
+请使用pthread_attr_init()将对象属性初始化为其缺省值。存储空间是在执行期间
+由线程系统分配的。
+pthread_attr_init语法
+tattr的缺省属性值
+属性 值 结果
+scope PTHREAD_SCOPE_PROCESS 新线程与进程中的其他线程发生竞争。
+detachstate PTHREAD_CREATE_JOINABLE 线程退出后，保留完成状态和线程ID。
+stackaddr NULL 新线程具有系统分配的栈地址。
+stacksize 0 新线程具有系统定义的栈大小。
+priority 0 新线程的优先级为0。
+inheritsched PTHREAD_EXPLICIT_SCHED 新线程不继承父线程调度优先级。
+schedpolicy SCHED_OTHER 新线程对同步对象争用使用Solaris定义的固定优先级。线程将一直运行，直到被抢占或者直到线程阻塞或停止为止。
+2.销毁属性
+请使用pthread_attr_destroy()删除初始化期间分配的存储空间。属性对象将会无效。
+3.设置分离状态
+如果创建分离线程(PTHREAD_CREATE_DETACHED)，则该线程一退出，便可重用其线程ID
+和其他资源。如果调用线程不准备等待线程退出，请使用
+pthread_attr_setdetachstate()。
+如果使用PTHREAD_CREATE_JOINABLE创建非分离线程，则假设应用程序将等待线程完
+成。也就是说，程序将对线程执行pthread_join()。
+无论是创建分离线程还是非分离线程，在所有线程都退出之前，进程不会退出。有关
+从main()提前退出而导致的进程终止的讨论，请参见第43页中的“结束”。
+注– 如果未执行显式同步来防止新创建的分离线程失败，则在线程创建者从
+pthread_create()返回之前，可以将其线程ID重新分配给另一个新线程。
+非分离线程在终止后，必须要有一个线程用join来等待它。否则，不会释放该线程的
+资源以供新线程使用，而这通常会导致内存泄漏。因此，如果不希望线程被等待，请
+将该线程作为分离线程来创建
+4.获取分离状态
+请使用pthread_attr_getdetachstate()检索线程创建状态（可以为分离或连接）。
+5.设置栈溢出保护区大小
+pthread_attr_setguardsize()可以设置attr对象的guardsize。
+6.获取栈溢出保护区大小
+pthread_attr_getguardsize()可以获取attr对象的guardsize。
+7.设置范围
+请使用pthread_attr_setscope()建立线程的争用范围（PTHREAD_SCOPE_SYSTEM或
+PTHREAD_SCOPE_PROCESS）。使用PTHREAD_SCOPE_SYSTEM时，此线程将与系统中的所有
+线程进行竞争。使用PTHREAD_SCOPE_PROCESS时，此线程将与进程中的其他线程进行竞
+争。
+8.获取范围
+请使用pthread_attr_getscope()检索线程范围。
+9.设置线程并行级别
+应用程序使用pthread_setconcurrency()通知系统其所需的并发级别。
+10.获取线程并行级别
+pthread_getconcurrency()返回先前调用pthread_setconcurrency()时设置的值。
+11.设置调度策略
+请使用pthread_attr_setschedpolicy()设置调度策略。POSIX标准指定SCHED_FIFO
+（先入先出）、SCHED_RR（循环）或SCHED_OTHER（实现定义的方法）的调度策略属
+性。
+■
+SCHED_FIFO
+如果调用进程具有有效的用户ID0，则争用范围为系统(PTHREAD_SCOPE_SYSTEM)的
+先入先出线程属于实时(RT)调度类。如果这些线程未被优先级更高的线程抢占，则
+会继续处理该线程，直到该线程放弃或阻塞为止。对于具有进程争用范围
+(PTHREAD_SCOPE_PROCESS))的线程或其调用进程没有有效用户ID0的线程，请使用
+SCHED_FIFO。SCHED_FIFO基于TS调度类。
+■
+SCHED_RR
+如果调用进程具有有效的用户ID0，则争用范围为系统(PTHREAD_SCOPE_SYSTEM))的
+循环线程属于实时(RT)调度类。如果这些线程未被优先级更高的线程抢占，并且这
+些线程没有放弃或阻塞，则在系统确定的时间段内将一直执行这些线程。对于具有
+进程争用范围(PTHREAD_SCOPE_PROCESS)的线程，请使用SCHED_RR（基于TS调度
+类）。此外，这些线程的调用进程没有有效的用户ID0。
+SCHED_FIFO和SCHED_RR在POSIX标准中是可选的，而且仅用于实时线程。
+12.获取调度策略
+请使用pthread_attr_getschedpolicy()检索调度策略
+13.设置继承的调度策略
+请使用pthread_attr_setinheritsched()设置继承的调度策略。
+14.获取继承的调度策略
+pthread_attr_getinheritsched()将返回由pthread_attr_setinheritsched()设置的调度策略。
+15.设置调度参数
+pthread_attr_setschedparam()可以设置调度参数。
+16.获取调度参数
+pthread_attr_getschedparam()将返回由pthread_attr_setschedparam()定义的调度参数。
+17.使用指定的优先级创建线程
+创建线程之前，可以设置优先级属性。将使用在sched_param结构中指定的新优先级创
+建子线程。此结构还包含其他调度信息。
+创建子线程时建议执行以下操作：
+■
+获取现有参数
+■
+更改优先级
+■
+创建子线程
+■
+恢复原始优先级
+18.设置栈大小
+pthread_attr_setstacksize()可以设置线程栈大小。
+19.获取栈大小
+pthread_attr_getstacksize()将返回由pthread_attr_setstacksize()设置的栈大小
+20.关于栈
+通常，线程栈是从页边界开始的。任何指定的大小都被向上舍入到下一个页边界。不
+具备访问权限的页将被附加到栈的溢出端。大多数栈溢出都会导致将SIGSEGV信号发送
+到违例线程。将直接使用调用方分配的线程栈，而不进行修改。
+指定栈时，还应使用PTHREAD_CREATE_JOINABLE创建线程。在该线程的
+pthread_join()调用返回之前，不会释放该栈。在该线程终止之前，不会释放该线
+程的栈。了解这类线程是否已终止的唯一可靠方式是使用pthread_join()。
+21.设置栈地址和大小
+pthread_attr_setstack()可以设置线程栈地址和大小。
+22.获取栈地址和大小
+pthread_attr_getstack()将返回由pthread_attr_setstack()设置的线程栈地址和大小。
+
+
+
+三、用同步对象编程
+同步对象是内存中的变量，可以按照与访问数据完全相同的方式对其进行访问。不同
+进程中的线程可以通过放在由线程控制的共享内存中的同步对象互相通信。尽管不同
+进程中的线程通常互不可见，但这些线程仍可以互相通信。
+同步对象还可以放在文件中。同步对象可以比创建它的进程具有更长的生命周期。
+同步对象具有以下可用类型：
+■
+互斥锁
+■
+条件变量
+■
+读写锁
+■
+信号
+同步的作用包括以下方面：
+■
+同步是确保共享数据一致性的唯一方法。
+■
+两个或多个进程中的线程可以合用一个同步对象。由于重新初始化同步对象会将对
+象的状态设置为解除锁定，因此应仅由其中的一个协作进程来初始化同步对象。
+■
+同步可确保可变数据的安全性。
+■
+进程可以映射文件并指示该进程中的线程获取记录锁。一旦获取了记录锁，映射此
+文件的任何进程中尝试获取该锁的任何线程都会被阻塞，直到释放该锁为止。
+■
+访问一个基本类型变量（如整数）时，可以针对一个内存负荷使用多个存储周期。
+如果整数没有与总线数据宽度对齐或者大于数据宽度，则会使用多个存储周期。尽
+管这种整数不对齐现象不会出现在SPARC ® PlatformEdition体系结构上，但是可移
+植的程序却可能会出现对齐问题。
+
+1.互斥锁属性
+使用互斥锁（互斥）可以使线程按顺序执行。通常，互斥锁通过确保一次只有一个线
+程执行代码的临界段来同步多个线程。互斥锁还可以保护单线程代码。
+要更改缺省的互斥锁属性，可以对属性对象进行声明和初始化。通常，互斥锁属性会
+设置在应用程序开头的某个位置，以便可以快速查找和轻松修改。
+ 互斥锁属性例程
+操作 相关函数说明
+初始化互斥锁属性对象 第77页中的“pthread_mutexattr_init语法”
+销毁互斥锁属性对象 第78页中的“pthread_mutexattr_destroy语法”
+设置互斥锁范围 第79页中的“pthread_mutexattr_setpshared语法”
+获取互斥锁范围 第80页中的“pthread_mutexattr_getpshared语法”
+设置互斥锁的类型属性 第80页中的“pthread_mutexattr_settype语法”
+获取互斥锁的类型属性 第82页中的“pthread_mutexattr_gettype语法”
+设置互斥锁属性的协议 第82页中的“pthread_mutexattr_setprotocol语法”
+获取互斥锁属性的协议 第84页中的“pthread_mutexattr_getprotocol语法”
+设置互斥锁属性的优先级上限 第85页中的“pthread_mutexattr_setprioceiling语法”
+获取互斥锁属性的优先级上限 第86页中的“pthread_mutexattr_getprioceiling语法”
+设置互斥锁的优先级上限 第87页中的“pthread_mutex_setprioceiling语法”
+获取互斥锁的优先级上限 第88页中的“pthread_mutex_getprioceiling语法”
+设置互斥锁的强健属性 第89页中的“pthread_mutexattr_setrobust_np语法”
+获取互斥锁的强健属性 第91页中的“pthread_mutexattr_getrobust_np语法”
+互斥锁范围比较
+Solaris POSIX 定义
+USYNC_PROCESS PTHREAD_PROCESS_SHARED 用于同步该进程和其他进程中的线程
+USYNC_PROCESS_ROBUST 无POSIX等效项 用于在进程间可靠地同步线程
+USYNC_THREAD PTHREAD_PROCESS_PRIVATE 用于仅同步该进程中的线程
+2.初始化互斥锁属性对象
+使用pthread_mutexattr_init()可以将与互斥锁对象相关联的属性初始化为其缺省
+值。在执行过程中，线程系统会为每个属性对象分配存储空间。
+对于互斥锁属性对象，必须首先通过调用pthread_mutexattr_destroy(3C)将其销毁，
+才能重新初始化该对象。pthread_mutexattr_init()调用会导致分配类型为opaque的
+对象。如果未销毁该对象，则会导致内存泄漏。
+3.销毁互斥锁属性对象
+pthread_mutexattr_destroy()可用来取消分配用于维护pthread_mutexattr_init()
+所创建的属性对象的存储空间。
+4.设置互斥锁的范围
+pthread_mutexattr_setpshared()可用来设置互斥锁变量的作用域
+互斥锁变量可以是进程专用的（进程内）变量，也可以是系统范围内的（进程间）变
+量。要在多个进程中的线程之间共享互斥锁，可以在共享内存中创建互斥锁，并将
+pshared属性设置为PTHREAD_PROCESS_SHARED。此行为与最初的Solaris线程实现中
+mutex_init()中的USYNC_PROCESS标志等效。
+如果互斥锁的pshared属性设置为PTHREAD_PROCESS_PRIVATE，则仅有那些由同一个进程
+创建的线程才能够处理该互斥锁。
+5.获取互斥锁的范围
+pthread_mutexattr_getpshared()可用来返回由pthread_mutexattr_setpshared()定
+义的互斥锁变量的范围。
+6.设置互斥锁类型的属性
+pthread_mutexattr_settype()可用来设置互斥锁的type属性。
+type参数指定互斥锁的类型。以下列出了有效的互斥锁类型：
+PTHREAD_MUTEX_NORMAL
+描述: 此类型的互斥锁不会检测死锁。如果线程在不首先解除互斥锁的情况下尝试重
+新锁定该互斥锁，则会产生死锁。尝试解除由其他线程锁定的互斥锁会产生不确定
+的行为。如果尝试解除锁定的互斥锁未锁定，则会产生不确定的行为。
+PTHREAD_MUTEX_ERRORCHECK
+描述: 此类型的互斥锁可提供错误检查。如果线程在不首先解除锁定互斥锁的情况下
+尝试重新锁定该互斥锁，则会返回错误。如果线程尝试解除锁定的互斥锁已经由其
+他线程锁定，则会返回错误。如果线程尝试解除锁定的互斥锁未锁定，则会返回错
+误。
+PTHREAD_MUTEX_RECURSIVE
+描述: 如果线程在不首先解除锁定互斥锁的情况下尝试重新锁定该互斥锁，则可成功
+锁定该互斥锁。与PTHREAD_MUTEX_NORMAL类型的互斥锁不同，对此类型互斥锁进行
+重新锁定时不会产生死锁情况。多次锁定互斥锁需要进行相同次数的解除锁定才可
+以释放该锁，然后其他线程才能获取该互斥锁。如果线程尝试解除锁定的互斥锁已
+经由其他线程锁定，则会返回错误。如果线程尝试解除锁定的互斥锁未锁定，则会
+返回错误。
+PTHREAD_MUTEX_DEFAULT
+描述: 如果尝试以递归方式锁定此类型的互斥锁，则会产生不确定的行为。对于不是
+由调用线程锁定的此类型互斥锁，如果尝试对它解除锁定，则会产生不确定的行
+为。对于尚未锁定的此类型互斥锁，如果尝试对它解除锁定，也会产生不确定的行
+为。允许在实现中将该互斥锁映射到其他互斥锁类型之一。对于Solaris线程，
+PTHREAD_PROCESS_DEFAULT会映射到PTHREAD_PROCESS_NORMAL

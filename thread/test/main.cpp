@@ -16,10 +16,6 @@ void* thread(void* ptr)
     return 0;
 }
 
-
-
-
-
 int main()
 {
     pthread_attr_t attr;
