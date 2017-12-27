@@ -11,6 +11,7 @@
 #include <sys/types.h>
 
 #define DEFAULTPORT 6666
+
 #ifndef INVALID_SOCKET
 #define INVALID_SOCKET  (-1)
 #endif
@@ -21,7 +22,7 @@
 #define closesocket(x)  ::close(x)
 #endif
 
-typedef void (*fn_get_data_callback)(char* data, int len);
+typedef void (*fn_get_data)(unsigned char* data, int len);
 
 class SocketServer
 {
@@ -30,15 +31,15 @@ public:
     ~SocketServer();
     void initServer();
     void finalServer();
-    int sendMsg(const char* msg, int len);
-    void registerGetDataCallback(fn_get_data_callback callback);
+    int sendMsg(const unsigned char* msg, int len);
+    void registerGetData(fn_get_data callback);
 private:
-    int receiveMsg(char* msg, int len);
+    int receiveMsg(unsigned char* msg, int len);
 
 private:
     int m_listenfd;
     int m_connfd;
-    fn_get_data_callback m_getData;
+    fn_get_data getData;
 };
 
 #endif // SERVER

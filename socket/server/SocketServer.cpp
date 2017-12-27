@@ -13,21 +13,21 @@ SocketServer::SocketServer()
 {
     m_listenfd = INVALID_SOCKET;
     m_connfd = INVALID_SOCKET;
-    m_getData = NULL;
+    getData = NULL;
 }
 
 
 SocketServer::~SocketServer()
 {
     finalServer();
-    m_getData = NULL;
+    getData = NULL;
 }
 
-int SocketServer::receiveMsg(char *msg, int len)
+int SocketServer::receiveMsg(unsigned char* msg, int len)
 {
     int cnt;
     int rc;
-    char* pch;
+    unsigned char* pch;
     pch = msg;
     cnt = len;
     while (cnt > 0) {
@@ -52,11 +52,11 @@ int SocketServer::receiveMsg(char *msg, int len)
     return len - cnt - 1;
 }
 
-int SocketServer::sendMsg(const char *msg, int len)
+int SocketServer::sendMsg(const unsigned char* msg, int len)
 {
     int cnt;
     int rc;
-    const char* pch;
+    const unsigned char* pch;
     pch = msg;
     cnt = len;
     while (cnt > 0) {
@@ -74,15 +74,15 @@ int SocketServer::sendMsg(const char *msg, int len)
     return len;
 }
 
-void SocketServer::registerGetDataCallback(fn_get_data_callback callback)
+void SocketServer::registerGetData(fn_get_data callback)
 {
-    m_getData = callback;
+    getData = callback;
 }
 
 void SocketServer::initServer()
 {
     struct sockaddr_in servaddr;  //server address
-    struct sockaddr_in  cliaddr;  //client address
+    struct sockaddr_in cliaddr;  //client address
     socklen_t cliaddr_len;
     char buf[BUFSIZ];
     memset(buf, 0, BUFSIZ);
@@ -118,9 +118,8 @@ void SocketServer::initServer()
             perr_exit("accept error");
         }
 
-        bufLen = receiveMsg(buf, BUFSIZ);
-//        m_getData(buf, bufLen);
-        sendMsg(buf, bufLen);
+        bufLen = receiveMsg((unsigned char*)buf, BUFSIZ);
+        getData((unsigned char*)buf, bufLen);
     }
     closesocket(m_connfd);
 }
