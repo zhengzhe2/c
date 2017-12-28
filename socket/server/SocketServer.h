@@ -11,7 +11,6 @@
 #include <sys/types.h>
 
 #define DEFAULTPORT 6666
-
 #ifndef INVALID_SOCKET
 #define INVALID_SOCKET  (-1)
 #endif
@@ -39,6 +38,7 @@ private:
 private:
     int m_listenfd;
     int m_connfd;
+    bool m_isAccept;
     fn_get_data getData;
 };
 

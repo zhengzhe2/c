@@ -1,6 +1,5 @@
 #include "SocketServer.h"
 #include "errno.h"
-
 #define THREADMAXSIZE 10
 
 static void perr_exit(const char* s)
@@ -13,6 +12,7 @@ SocketServer::SocketServer()
 {
     m_listenfd = INVALID_SOCKET;
     m_connfd = INVALID_SOCKET;
+    m_isAccept = true;
     getData = NULL;
 }
 
@@ -23,28 +23,37 @@ SocketServer::~SocketServer()
     getData = NULL;
 }
 
-int SocketServer::receiveMsg(unsigned char* msg, int len)
+int SocketServer::receiveMsg(unsigned char *msg, int len)
 {
+    printf("receive Msg from client !!!!!!\n");
     int cnt;
     int rc;
     unsigned char* pch;
     pch = msg;
     cnt = len;
-    while (cnt > 0) {
-        rc = read(m_connfd, pch, cnt);
+    while (cnt > 0 && m_connfd != INVALID_SOCKET) {
+        rc = recv(m_connfd, pch, cnt, 0);
         if ( rc < 0) {
             if (errno == EINTR) {
+                printf("socket connect normal !!!!!\n");
                 rc = 0;
             }
             else {
+                m_isAccept = true;
+                closesocket(m_connfd);
+                printf("recv failed, socket reconnect !!!!\n");
                 return -1;
             }
         } else if (rc == 0) {
+            m_isAccept = true;
+            closesocket(m_connfd);
+            printf("client close, socket reconnect !!!!\n");
             break;
         }else {
             cnt -= rc;
             pch += rc;
             if (*(pch-1) == '\0') {    //handle read() block by special character
+                printf("data reception is completed!!!!\n");
                 break;
             }
         }
@@ -52,19 +61,21 @@ int SocketServer::receiveMsg(unsigned char* msg, int len)
     return len - cnt - 1;
 }
 
-int SocketServer::sendMsg(const unsigned char* msg, int len)
+int SocketServer::sendMsg(const unsigned char *msg, int len)
 {
+    printf("send Msg to client !!!!!!!!!!\n");
     int cnt;
     int rc;
     const unsigned char* pch;
     pch = msg;
     cnt = len;
-    while (cnt > 0) {
-        if ( (rc = write(m_connfd, pch, cnt)) <= 0) {
+    while (cnt > 0 && m_connfd != INVALID_SOCKET) {
+        if ( (rc = send(m_connfd, pch, cnt, 0)) <= 0) {
             if (rc < 0 && errno == EINTR) {
                 rc = 0;
             }
             else {
+                printf("send msg failed !!!!\n");
                 return -1;
             }
         }
@@ -79,16 +90,17 @@ void SocketServer::registerGetData(fn_get_data callback)
     getData = callback;
 }
 
+
 void SocketServer::initServer()
 {
     struct sockaddr_in servaddr;  //server address
-    struct sockaddr_in cliaddr;  //client address
+    struct sockaddr_in  cliaddr;  //client address
     socklen_t cliaddr_len;
-    char buf[BUFSIZ];
+    unsigned char buf[BUFSIZ];
     memset(buf, 0, BUFSIZ);
     int bufLen;
 
-    //初始化Socket
+    //init Socket
     m_listenfd = socket(AF_INET, SOCK_STREAM, 0);
     if (INVALID_SOCKET == m_listenfd) {
         perr_exit("socket error");
@@ -96,12 +108,9 @@ void SocketServer::initServer()
 
     bzero(&servaddr, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    //IP地址设置成INADDR_ANY,让系统自动获取本机的IP地址。
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    //设置的端口为DEFAULT_PORT。
     servaddr.sin_port = htons(DEFAULTPORT);
 
-    //将本地地址绑定到所创建的套接字上
     if (bind(m_listenfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) == SOCKET_ERROR) {
         perr_exit("bind error");
     }
@@ -112,14 +121,17 @@ void SocketServer::initServer()
 
     printf("Accepting connections ...\n");
     while (1) {
-        cliaddr_len = sizeof(cliaddr);
-        m_connfd = accept(m_listenfd, (struct sockaddr*)&cliaddr, &cliaddr_len);
-        if (INVALID_SOCKET == m_connfd) {
-            perr_exit("accept error");
+        if (m_isAccept) {
+            m_isAccept = false;
+            cliaddr_len = sizeof(cliaddr);
+            m_connfd = accept(m_listenfd, (struct sockaddr*)&cliaddr, &cliaddr_len);
+            if (INVALID_SOCKET == m_connfd) {
+                perr_exit("accept error");
+            }
         }
-
-        bufLen = receiveMsg((unsigned char*)buf, BUFSIZ);
-        getData((unsigned char*)buf, bufLen);
+        bufLen = receiveMsg(buf, BUFSIZ);
+        printf("buf :%s   bufLen :%d  flag:%d \n", buf, bufLen, m_isAccept);
+        getData(buf, bufLen);
     }
     closesocket(m_connfd);
 }
