@@ -33,7 +33,7 @@ client.on('close', function() {
 });
 
 client.on('error', function() {
-    console.log('client error:', error);
+    console.log('client connected error !!!!!');
     // 完全关闭连接
     client.destroy();
 });
